@@ -1,0 +1,14 @@
+# You can acquire the vendor and product id of your keyboard via the `lsusb` command
+# Output will look something like: "Bus 001 Device 043: ID 03f0:0024 HP, Inc KU-0316 Keyboard"
+# Replace the ATTRs{} blocks with the two hexadecimel numbers after ID
+# e.g for the keyboard I have ATTRS{id/vendor}=="03f0", ATTRS{id/product}=="0024"
+
+# Setting a group is vitally important if you want to access the device as a non-root user. Make sure you are in the specified group!
+# For security reasons, do *NOT* add yourself to the `input` group.
+
+# Setting a symlink value (where N is a number or identifier) is recommended, as evdev devices often change their event path between replugs or reboots
+# These will show up as `/dev/input/macroN` for persistant use.
+
+# Add additional lines for extra devices and season to taste.
+
+SUBSYSTEM=="input", ATTRS{id/vendor}=="xxxx", ATTRS{id/product}=="yyyy", MODE="0660", GROUP="somegroup", SYMLINK+="input/macroN"
