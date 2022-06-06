@@ -13,17 +13,17 @@ def main():
     m = macro.MacroDevice(EVDEV_DEVICE, grab=True)
     m.register_macro(
         ecodes.KEY_KP0,
-        1,
+        macro.KeyState.K_DOWN,
         macro.Macro("type some text", macro.MacroType.M_PRINT, "test\n"),
     )
     m.register_macro(
         ecodes.KEY_KPENTER,
-        1,
+        macro.KeyState.K_DOWN,
         macro.Macro("type the date", macro.MacroType.M_SHELL, "date"),
     )
     m.register_macro(
         ecodes.KEY_KPPLUS,
-        1,
+        macro.KeyState.K_DOWN,
         macro.Macro("run a program", macro.MacroType.M_EXEC, "/usr/bin/kwrite"),
     )
 

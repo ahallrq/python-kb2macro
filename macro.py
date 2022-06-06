@@ -16,6 +16,12 @@ class MacroType(Enum):
     M_PYTHON = 5  # Run a Python function
 
 
+class KeyState(Enum):
+    K_UP = 0
+    K_DOWN = 1
+    K_HOLD = 2
+
+
 class Macro:
     def __init__(self, name: str, type: MacroType, value: str | Callable):
         self.name = name
@@ -60,7 +66,7 @@ class MacroDevice:
     def register_macro(
         self,
         key: Any,
-        state: int,
+        state: KeyState,
         macro: Macro,
     ) -> bool:
         if key not in self.__macros:
@@ -71,10 +77,12 @@ class MacroDevice:
             return False
         else:
             self.__macros[key][state] = macro
-            print(f'Bound macro "{macro.name} to key {evdev.ecodes.KEY[key]} {state}.')
+            print(
+                f'Bound macro "{macro.name} to key {evdev.ecodes.KEY[key]} {state.name}.'
+            )
             return True
 
-    def unregister_macro(self, key: evdev.ecodes, state: int) -> bool:
+    def unregister_macro(self, key: evdev.ecodes, state: KeyState) -> bool:
         if key in self.__macros and state in self.__macros[key]:
             self.__macros[key].pop(state)
             return True
@@ -82,7 +90,7 @@ class MacroDevice:
             print("Failed to remove macro: Key not bound.")
             return True
 
-    def run_macro(self, key: evdev.ecodes, state: int) -> None:
+    def run_macro(self, key: evdev.ecodes, state: KeyState) -> None:
         pass
 
     def event_loop(self) -> None:
