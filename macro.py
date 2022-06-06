@@ -16,6 +16,35 @@ class MacroType(Enum):
     M_PYTHON = 5  # Run a Python function
 
 
+class Macro:
+    def __init__(self, name: str, type: MacroType, value: str | Callable):
+        self.name = name
+        self.macro_type = type
+        self.macro_value = value
+
+    def __call__(self):
+        getattr(self, self.macro_type.name)()
+
+    def M_PRINT(self):
+        pyautogui.write(self.macro_value)
+
+    def M_TYPE(self):
+        pass
+
+    def M_SHELL(self):
+        pyautogui.write(
+            subprocess.check_output(shlex.split(self.macro_value), shell=True).decode(
+                "utf-8"
+            )
+        )
+
+    def M_EXEC(self):
+        subprocess.Popen(shlex.split(self.macro_value))
+
+    def M_PYTHON(self):
+        pass
+
+
 class MacroDevice:
     def __init__(self, evdev_path: str, grab=True):
         self.__macros = {}
@@ -32,8 +61,7 @@ class MacroDevice:
         self,
         key: Any,
         state: int,
-        type: MacroType,
-        value: str | Callable,
+        macro: Macro,
     ) -> bool:
         if key not in self.__macros:
             self.__macros[key] = {}
@@ -42,10 +70,8 @@ class MacroDevice:
             print("Failed to register macro: Key already assigned.")
             return False
         else:
-            self.__macros[key][state] = {"type": type, "value": value}
-            print(
-                f'Bound macro {type} "{value}" to key {evdev.ecodes.KEY[key]} {state}.'
-            )
+            self.__macros[key][state] = macro
+            print(f'Bound macro "{macro.name} to key {evdev.ecodes.KEY[key]} {state}.')
             return True
 
     def unregister_macro(self, key: evdev.ecodes, state: int) -> bool:
@@ -65,20 +91,4 @@ class MacroDevice:
                 continue
 
             if macro := self.__macros.get(ev.code, {}).get(ev.value, None):
-                match macro["type"]:
-                    case MacroType.M_PRINT:
-                        pyautogui.write(macro["value"])
-                    case MacroType.M_TYPE:
-                        pass
-                    case MacroType.M_SHELL:
-                        pyautogui.write(
-                            subprocess.check_output(
-                                shlex.split(macro["value"]), shell=True
-                            ).decode("utf-8")
-                        )
-                    case MacroType.M_EXEC:
-                        subprocess.Popen(shlex.split(macro["value"]))
-                    case MacroType.M_PYTHON:
-                        pass
-                    case _:
-                        continue
+                macro()
