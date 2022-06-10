@@ -1,12 +1,17 @@
-from curses import KEY_DOWN
-from enum import Enum
-import random
-import subprocess, shlex
+import importlib
+import io
+import shlex
+import subprocess
 import sys
 import time
+from contextlib import redirect_stderr, redirect_stdout
+from enum import Enum
+from os.path import basename, dirname, realpath
 from typing import Any, Callable
+
 import evdev
 import pyautogui
+import pyperclip
 
 pyautogui.PAUSE = 0
 
@@ -35,6 +40,19 @@ class Macro:
         self.macro_value = value
         self.macro_args = args
 
+    def paste_output(self, p: Any):
+        out = ""
+        if callable(p):
+            callable_out = io.StringIO()
+            with redirect_stdout(callable_out):
+                p()
+            out = callable_out.getvalue()
+        else:
+            out = str(p)
+        pyperclip.copy(out)
+        with pyautogui.hold("ctrl"):
+            pyautogui.press("v")
+
     def __call__(self, *args, **kwargs):
         """When the object is called this will attempt to run the method with the same name as the macro type"""
         getattr(self, self.macro_type.name)(*args, **kwargs)
@@ -48,7 +66,6 @@ class Macro:
         # TODO: In the future, improve this method such that the pyautogui calls are generated \
         #   when the macro is registered rather than parsing macro_value each time.
         delay = self.macro_args.get("delay", 0.01)
-        delay_randomness = self.macro_args.get("delay_randomness", 0)
 
         for k in self.macro_value:
             (key, state) = k
@@ -59,9 +76,7 @@ class Macro:
                     pyautogui.keyDown(key)
                 case KeyState.K_UP:
                     pyautogui.keyUp(key)
-            time.sleep(
-                delay + round(random.uniform(-delay_randomness, delay_randomness), 2)
-            )
+            time.sleep(delay)
 
     def M_SHELL(self):
         """Run a shell command and type the output."""
@@ -78,7 +93,17 @@ class Macro:
 
     def M_PYTHON(self):
         """Excute a Python method"""
-        pass
+        paste_output = self.macro_args.get("paste_output", False)
+
+        script_path = dirname(realpath(self.macro_value["path"]))
+        script_filename = basename(realpath(self.macro_value["path"])).split(".")[0]
+        if script_path not in sys.path:
+            sys.path.append(script_path)
+
+        lib = importlib.import_module(script_filename)
+        method = getattr(lib, self.macro_value["method"])
+
+        self.paste_output(method) if paste_output else method()
 
 
 class MacroDevice:

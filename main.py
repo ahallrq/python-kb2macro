@@ -54,6 +54,21 @@ def main():
             {"delay": 0.100},
         ),
     )
+    m.register_macro(
+        ecodes.KEY_KP9,
+        macro.KeyState.K_DOWN,
+        macro.Macro(
+            "run a python method",
+            macro.MacroType.M_PYTHON,
+            {
+                "path": "/home/andrew/Temp/macrotestscript.py",
+                "method": "testfunc",
+                "args": [],
+                "kwargs": {},
+            },
+            {"paste_output": True},
+        ),
+    )
 
     m.event_loop()
     m.__evdev.ungrab()
