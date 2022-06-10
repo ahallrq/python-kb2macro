@@ -15,12 +15,33 @@ def main():
     m.register_macro(
         ecodes.KEY_KP0,
         macro.KeyState.K_DOWN,
-        macro.Macro("type some text", macro.MacroType.M_PRINT, "test\n"),
+        macro.Macro(
+            "type some text",
+            macro.MacroType.M_PRINT,
+            "He just kept talking in one long incredibly unbroken sentence moving from topic to topic so that no-one had a chance to interrupt; it was really quite hypnotic.\n",
+        ),
+    )
+    m.register_macro(
+        ecodes.KEY_KP0,
+        macro.KeyState.K_DOWN,
+        macro.Macro(
+            "paste some text",
+            macro.MacroType.M_PRINT,
+            "He just kept talking in one long incredibly unbroken sentence moving from topic to topic so that no-one had a chance to interrupt; it was really quite hypnotic.\n",
+            {"paste_output": True},
+        ),
     )
     m.register_macro(
         ecodes.KEY_KPENTER,
         macro.KeyState.K_DOWN,
         macro.Macro("type the date", macro.MacroType.M_SHELL, "date"),
+    )
+    m.register_macro(
+        ecodes.KEY_KP3,
+        macro.KeyState.K_DOWN,
+        macro.Macro(
+            "paste the date", macro.MacroType.M_SHELL, "date", {"paste_output": True}
+        ),
     )
     m.register_macro(
         ecodes.KEY_KPPLUS,
