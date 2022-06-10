@@ -83,12 +83,14 @@ class Macro:
 
     def M_SHELL(self):
         """Run a shell command and type the output."""
-        # TODO: change this so it can use the clipboard (xsel or xclip) instead of typing the output
-        pyautogui.write(
-            subprocess.check_output(shlex.split(self.macro_value), shell=True).decode(
-                "utf-8"
-            )
-        )
+        paste_output = self.macro_args.get("paste_output", True)
+
+        output = subprocess.check_output(self.macro_value, shell=True).decode("utf-8")
+
+        if paste_output:
+            self.paste_output(output)
+        else:
+            pyautogui.write(output)
 
     def M_EXEC(self):
         """Run a program"""
