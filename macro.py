@@ -59,7 +59,10 @@ class Macro:
 
     def M_PRINT(self):
         """Type a block of text onto the keyboard"""
-        pyautogui.write(self.macro_value)
+        paste_output = self.macro_args.get("paste_output", False)
+        self.paste_output(self.macro_value) if paste_output else pyautogui.write(
+            self.macro_value
+        )
 
     def M_TYPE(self):
         """Type a series of keypresses including control keys."""
@@ -130,7 +133,7 @@ class MacroDevice:
         if key not in self.__macros:
             self.__macros[key] = {}
 
-        if state in self.__macros[key]:
+        if state.name in self.__macros[key]:
             print("Failed to register macro: Key already assigned.")
             return False
         else:
