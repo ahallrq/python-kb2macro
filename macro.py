@@ -155,7 +155,7 @@ class MacroDevice:
             return True
 
     def event_loop(self) -> None:
-        """Main keyboard even loop
+        """Main keyboard event loop
 
         This reads from evdev in a loop filtering for key events. If found,
         it then executes them based on whatever the macro is set to do.

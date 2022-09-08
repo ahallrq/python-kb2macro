@@ -4,14 +4,12 @@ from evdev import ecodes
 import pyautogui
 import macro
 
-# udev rule: SUBSYSTEM=="input", ATTRS{id/vendor}=="xxxx", ATTRS{id/product}=="yyyy", MODE="0660", GROUP="somegroup", SYMLINK+="input/macroN"
 
-EVDEV_DEVICE = "/dev/input/macro1"
-DEBUG_KEYS = False
+EVDEV_DEVICE = "/dev/input/macro0"
 
 
 def main():
-    m = macro.MacroDevice(EVDEV_DEVICE, grab=True, debug=DEBUG_KEYS)
+    m = macro.MacroDevice(EVDEV_DEVICE)
     m.register_macro(
         ecodes.KEY_KP0,
         macro.KeyState.K_DOWN,
