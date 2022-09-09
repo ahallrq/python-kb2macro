@@ -4,7 +4,7 @@ import shlex
 import subprocess
 import sys
 import time
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import redirect_stdout
 from enum import Enum
 from os.path import basename, dirname, realpath
 from typing import Any, Callable
@@ -32,11 +32,9 @@ class KeyState(Enum):
 
 
 class Macro:
-    def __init__(
-        self, name: str, type: MacroType, value: str | Callable, args: dict = {}
-    ):
+    def __init__(self, name: str, mtype: MacroType, value: str | Callable, args: dict = {}):
         self.name = name
-        self.macro_type = type
+        self.macro_type = mtype
         self.macro_value = value
         self.macro_args = args
 
@@ -60,9 +58,7 @@ class Macro:
     def M_PRINT(self):
         """Type a block of text onto the keyboard"""
         paste_output = self.macro_args.get("paste_output", False)
-        self.paste_output(self.macro_value) if paste_output else pyautogui.write(
-            self.macro_value
-        )
+        self.paste_output(self.macro_value) if paste_output else pyautogui.write(self.macro_value)
 
     def M_TYPE(self):
         """Type a series of keypresses including control keys."""
@@ -140,9 +136,7 @@ class MacroDevice:
             return False
         else:
             self.__macros[key][state.name] = macro
-            print(
-                f'Bound macro "{macro.name}" to key {evdev.ecodes.KEY[key]} {state.name}.'
-            )
+            print(f'Bound macro "{macro.name}" to key {evdev.ecodes.KEY[key]} {state.name}.')
             return True
 
     def unregister_macro(self, key: evdev.ecodes, state: KeyState) -> bool:
@@ -167,7 +161,5 @@ class MacroDevice:
             if self.debug:
                 print(evdev.categorize(ev))
 
-            if macro := self.__macros.get(ev.code, {}).get(
-                KeyState(ev.value).name, None
-            ):
+            if macro := self.__macros.get(ev.code, {}).get(KeyState(ev.value).name, None):
                 macro()

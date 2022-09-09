@@ -1,7 +1,4 @@
-import sys
-import evdev
 from evdev import ecodes
-import pyautogui
 import macro
 
 
@@ -37,9 +34,7 @@ def main():
     m.register_macro(
         ecodes.KEY_KP3,
         macro.KeyState.K_DOWN,
-        macro.Macro(
-            "paste the date", macro.MacroType.M_SHELL, "date", {"paste_output": True}
-        ),
+        macro.Macro("paste the date", macro.MacroType.M_SHELL, "date", {"paste_output": True}),
     )
     m.register_macro(
         ecodes.KEY_KPPLUS,
