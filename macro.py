@@ -51,9 +51,11 @@ class Macro:
         out = getattr(self, self.macro_type.name)(*args, **kwargs)
         if out is not None:
             if self.macro_args.get("paste_output", False) and PYPERCLIP_AVAILABLE:
+                previous = pyperclip.paste()
                 pyperclip.copy(out)
                 with pyautogui.hold("ctrl"):
                     pyautogui.press("v")
+                pyperclip.copy(previous)
             else:
                 pyautogui.write(out)
 
@@ -101,12 +103,22 @@ class Macro:
         if script_path not in sys.path:
             sys.path.append(script_path)
 
-        lib = importlib.import_module(script_filename)
+        try:
+            lib = importlib.import_module(script_filename)
+        except ModuleNotFoundError:
+            print(
+                f"Failed to run macro \"{self.name}\". The specified script was not found: {self.macro_value['path']}")
+            return
 
-        callable_out = io.StringIO()
-        with redirect_stdout(callable_out):
-            getattr(lib, self.macro_value["method"])()
-        return callable_out.getvalue()
+        try:
+            callable_out = io.StringIO()
+            with redirect_stdout(callable_out):
+                getattr(lib, self.macro_value["method"])()
+            return callable_out.getvalue()
+        except AttributeError:
+            print(
+                f"Failed to run macro \"{self.name}\". The specified method was not found: {self.macro_value['method']}")
+            return
 
 
 class MacroDevice:
