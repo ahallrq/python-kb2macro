@@ -1,17 +1,25 @@
+from contextlib import redirect_stderr, redirect_stdout
 import importlib
 import io
 import shlex
 import subprocess
 import sys
 import time
-from contextlib import redirect_stdout
 from enum import Enum
 from os.path import basename, dirname, realpath
 from typing import Any, Callable
 
 import evdev
 import pyautogui
-import pyperclip
+
+try:
+    import pyperclip
+
+    PYPERCLIP_AVAILABLE = True
+except ImportError:
+    print("Unable to load Pyperclip. Pasting the output of macros will fallback to typing.")
+    print("To install Pyperclip please run the following command: pip3 install pyperclip")
+    PYPERCLIP_AVAILABLE = False
 
 pyautogui.PAUSE = 0
 
@@ -38,27 +46,20 @@ class Macro:
         self.macro_value = value
         self.macro_args = args
 
-    def paste_output(self, p: Any):
-        out = ""
-        if callable(p):
-            callable_out = io.StringIO()
-            with redirect_stdout(callable_out):
-                p()
-            out = callable_out.getvalue()
-        else:
-            out = str(p)
-        pyperclip.copy(out)
-        with pyautogui.hold("ctrl"):
-            pyautogui.press("v")
-
     def __call__(self, *args, **kwargs):
         """When the object is called this will attempt to run the method with the same name as the macro type"""
-        getattr(self, self.macro_type.name)(*args, **kwargs)
+        out = getattr(self, self.macro_type.name)(*args, **kwargs)
+        if out is not None:
+            if self.macro_args.get("paste_output", False) and PYPERCLIP_AVAILABLE:
+                pyperclip.copy(out)
+                with pyautogui.hold("ctrl"):
+                    pyautogui.press("v")
+            else:
+                pyautogui.write(out)
 
     def M_PRINT(self):
         """Type a block of text onto the keyboard"""
-        paste_output = self.macro_args.get("paste_output", False)
-        self.paste_output(self.macro_value) if paste_output else pyautogui.write(self.macro_value)
+        return self.macro_value
 
     def M_TYPE(self):
         """Type a series of keypresses including control keys."""
@@ -77,34 +78,35 @@ class Macro:
                     pyautogui.keyUp(key)
             time.sleep(delay)
 
+        return
+
     def M_SHELL(self):
         """Run a shell command and type the output."""
-        paste_output = self.macro_args.get("paste_output", True)
-
-        output = subprocess.check_output(self.macro_value, shell=True).decode("utf-8")
-
-        if paste_output:
-            self.paste_output(output)
-        else:
-            pyautogui.write(output)
+        callable_out = io.StringIO()
+        with redirect_stdout(callable_out):
+            sys.stdout.write(subprocess.check_output(
+                self.macro_value, shell=True).decode("utf-8"))
+        return callable_out.getvalue()
 
     def M_EXEC(self):
         """Run a program"""
         subprocess.Popen(shlex.split(self.macro_value))
+        return
 
     def M_PYTHON(self):
         """Excute a Python method"""
-        paste_output = self.macro_args.get("paste_output", False)
-
         script_path = dirname(realpath(self.macro_value["path"]))
-        script_filename = basename(realpath(self.macro_value["path"])).split(".")[0]
+        script_filename = basename(
+            realpath(self.macro_value["path"])).split(".")[0]
         if script_path not in sys.path:
             sys.path.append(script_path)
 
         lib = importlib.import_module(script_filename)
-        method = getattr(lib, self.macro_value["method"])
 
-        self.paste_output(method) if paste_output else method()
+        callable_out = io.StringIO()
+        with redirect_stdout(callable_out):
+            getattr(lib, self.macro_value["method"])()
+        return callable_out.getvalue()
 
 
 class MacroDevice:
@@ -136,7 +138,8 @@ class MacroDevice:
             return False
         else:
             self.__macros[key][state.name] = macro
-            print(f'Bound macro "{macro.name}" to key {evdev.ecodes.KEY[key]} {state.name}.')
+            print(
+                f'Bound macro "{macro.name}" to key {evdev.ecodes.KEY[key]} {state.name}.')
             return True
 
     def unregister_macro(self, key: evdev.ecodes, state: KeyState) -> bool:
