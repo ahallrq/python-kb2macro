@@ -5,6 +5,7 @@ import shlex
 import subprocess
 import sys
 import time
+import re
 from enum import Enum
 from os.path import basename, dirname, realpath
 from typing import Any, Callable
@@ -69,15 +70,49 @@ class Macro:
         #   when the macro is registered rather than parsing macro_value each time.
         delay = self.macro_args.get("delay", 0.01)
 
-        for k in self.macro_value:
-            (key, state) = k
-            match state:
-                case KeyState.K_PRESS:
-                    pyautogui.press(key)
-                case KeyState.K_DOWN:
-                    pyautogui.keyDown(key)
-                case KeyState.K_UP:
-                    pyautogui.keyUp(key)
+        keypresses = filter(lambda x: x != "", self.macro_value.split(" "))
+
+        held_modifiers = {}
+
+        for k in keypresses:
+            # (key, state) = k
+
+            for modifier, keys_remaining in list(held_modifiers.items()):
+                if keys_remaining < 1:
+                    pyautogui.keyUp(modifier)
+                    held_modifiers.pop(modifier)
+                    continue
+                held_modifiers[modifier] -= 1
+
+            # press and hold key. e.g +shift holds the shift key down
+            if len(k) > 1 and k[0] == "+":
+                pyautogui.keyDown(k[1:])
+            # release held key. e.g -shift releases the shift key
+            elif len(k) > 1 and k[0] == "-":
+                pyautogui.keyUp(k[1:])
+            # TODO: This could be written better but it does the job for now.
+            elif len(k) > 1 and k[0] == "=":
+                hold_times = re.search(r"\d+", k)
+                if hold_times is None:
+                    hold_times = 1
+                    modifier = k[1:]
+                else:
+                    hold_times = int(hold_times.group())
+                    modifier = k.replace(f"={hold_times}", "")
+
+                if modifier != "":
+                    held_modifiers[modifier.lower()] = hold_times
+                    pyautogui.keyDown(modifier)
+            else:  # press and release the key
+                pyautogui.press(k)
+            # match state:
+            #     case KeyState.K_PRESS:
+            #         pyautogui.press(key)
+            #     case KeyState.K_DOWN:
+            #         pyautogui.keyDown(key[1:])
+            #     case KeyState.K_UP:
+            #         pyautogui.keyUp(key)
+
             time.sleep(delay)
 
         return
@@ -86,8 +121,7 @@ class Macro:
         """Run a shell command and type the output."""
         callable_out = io.StringIO()
         with redirect_stdout(callable_out):
-            sys.stdout.write(subprocess.check_output(
-                self.macro_value, shell=True).decode("utf-8"))
+            sys.stdout.write(subprocess.check_output(self.macro_value, shell=True).decode("utf-8"))
         return callable_out.getvalue()
 
     def M_EXEC(self):
@@ -98,38 +132,31 @@ class Macro:
     def M_PYTHON(self):
         """Excute a Python method"""
         script_path = dirname(realpath(self.macro_value["path"]))
-        script_filename = basename(
-            realpath(self.macro_value["path"])).split(".")[0]
+        script_filename = basename(realpath(self.macro_value["path"])).split(".")[0]
         if script_path not in sys.path:
             sys.path.append(script_path)
 
         try:
             lib = importlib.import_module(script_filename)
-        except ModuleNotFoundError:
-            print(
-                f"Failed to run macro \"{self.name}\". The specified script was not found: {self.macro_value['path']}")
-            return
-
-        try:
             callable_out = io.StringIO()
             with redirect_stdout(callable_out):
                 getattr(lib, self.macro_value["method"])()
             return callable_out.getvalue()
-        except AttributeError:
+        except (ModuleNotFoundError, AttributeError):
             print(
-                f"Failed to run macro \"{self.name}\". The specified method was not found: {self.macro_value['method']}")
+                f"Failed to run macro '{self.name}'. Check that the method '{self.macro_value['method']} exists in the script '{self.macro_value['path']} and reload the config."
+            )
             return
 
 
 class MacroDevice:
     def __init__(self, evdev_path: str, grab=True, debug=False):
         self.__macros = {}
+        self.grab = grab
 
         try:
             print(f"Opening device: {evdev_path}")
             self.__evdev = evdev.InputDevice(evdev_path)
-            if grab:
-                self.__evdev.grab()
         except Exception as e:
             sys.exit(f"Failed to open evdev device: {e}")
 
@@ -150,8 +177,7 @@ class MacroDevice:
             return False
         else:
             self.__macros[key][state.name] = macro
-            print(
-                f'Bound macro "{macro.name}" to key {evdev.ecodes.KEY[key]} {state.name}.')
+            print(f'Bound macro "{macro.name}" to key {evdev.ecodes.KEY[key]} {state.name}.')
             return True
 
     def unregister_macro(self, key: evdev.ecodes, state: KeyState) -> bool:
@@ -161,7 +187,16 @@ class MacroDevice:
             return True
         else:
             print("Failed to remove macro: Key not bound.")
-            return True
+            return False
+
+    def run(self) -> None:
+        if self.grab:
+            self.__evdev.grab()
+
+        self.event_loop()
+
+        if self.grab:
+            self.__evdev.ungrab()
 
     def event_loop(self) -> None:
         """Main keyboard event loop
