@@ -4,7 +4,7 @@
 # e.g for the keyboard I have ATTRS{id/vendor}=="03f0", ATTRS{id/product}=="0024"
 
 # Setting a group is vitally important if you want to access the device as a non-root user. Make sure you are in the specified group!
-# For security reasons, do *NOT* add yourself to the `input` group.
+# For security reasons, do *NOT* add yourself to the `input` group or run the macro program as root!
 
 # Setting a symlink value (where N is a number or identifier) is recommended, as evdev devices often change their event path between replugs or reboots
 # These will show up as `/dev/input/macroN` for persistant use.
