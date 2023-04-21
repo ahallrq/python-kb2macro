@@ -31,8 +31,6 @@ def is_valid_macro_config(m):
 
         # TODO: Extra validation for macro type macro.M_TYPE
 
-        # FIXME:HACK: test
-
         if not isinstance(m_item.get("value", None), str):
             return False, "Macro argument 'value' is missing or is the wrong type."
 
