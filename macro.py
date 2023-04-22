@@ -1,11 +1,11 @@
-from contextlib import redirect_stdout
 import importlib
 import io
+import re
 import shlex
 import subprocess
 import sys
 import time
-import re
+from contextlib import redirect_stdout
 from enum import Enum
 from os.path import basename, dirname, realpath
 from typing import Any, Callable
@@ -18,6 +18,7 @@ try:
 
     PYPERCLIP_AVAILABLE = True
 except ImportError:
+    # TODO: Improve Pyperclip detection: detect errors from lack of xclip and such
     print("WARN: Unable to load Pyperclip. Pasting the output of macros will fallback to typing.")
     print("To install Pyperclip please run the following command: pip3 install pyperclip")
     PYPERCLIP_AVAILABLE = False
@@ -87,6 +88,7 @@ class Macro:
                     continue
                 held_modifiers[modifier] -= 1
 
+            # TODO: Turn this into a match
             # press and hold key. e.g +shift holds the shift key down
             if len(k) > 1 and k[0] == "+":
                 pyautogui.keyDown(k[1:])
@@ -95,6 +97,7 @@ class Macro:
                 pyautogui.keyUp(k[1:])
             # TODO: This could be written better but it does the job for now.
             elif len(k) > 1 and k[0] == "=":
+                # TODO: Can I replace this with a simple int() and check?
                 hold_times = re.search(r"\d+", k)
                 if hold_times is None:
                     hold_times = 1
@@ -108,13 +111,6 @@ class Macro:
                     pyautogui.keyDown(modifier)
             else:  # press and release the key
                 pyautogui.press(k)
-            # match state:
-            #     case KeyState.K_PRESS:
-            #         pyautogui.press(key)
-            #     case KeyState.K_DOWN:
-            #         pyautogui.keyDown(key[1:])
-            #     case KeyState.K_UP:
-            #         pyautogui.keyUp(key)
 
             time.sleep(delay)
 
@@ -122,18 +118,16 @@ class Macro:
 
     def M_SHELL(self):
         """Run a shell command and type the output."""
-        callable_out = io.StringIO()
-        with redirect_stdout(callable_out):
-            sys.stdout.write(subprocess.check_output(self.macro_value, shell=True).decode("utf-8"))
-        return callable_out.getvalue()
+        proc = subprocess.Popen(self.macro_value, stdout=subprocess.PIPE, shell=True)
+
+        if not self.macro_args.get("background", False):
+            return proc.stdout.read().decode()
 
     def M_EXEC(self):
         """Run a program"""
-        proc = subprocess.Popen(shlex.split(self.macro_value), stdout=subprocess.PIPE)
+        proc = subprocess.Popen(shlex.split(self.macro_value), stdout=subprocess.PIPE, shell=False)
 
-        # Read the program's stdout and type/paste it if background = False
-        # Note: This blocks macro exection until the child exits and should only be used for short-running programs.
-        if not self.macro_args.get("background", False):
+        if not self.macro_args.get("background", True):
             return proc.stdout.read().decode()
 
     def M_PYTHON(self):
@@ -160,13 +154,13 @@ class Macro:
 
 class MacroDevice:
     def __init__(self, evdev_path: str, grab=True, debug=False):
-        self.__macros = {}
+        self._macros = {}
         self.grab = grab
 
         try:
             print(f"Opening device: {evdev_path}")
-            self.__evdev = evdev.InputDevice(evdev_path)
-        except Exception as e:
+            self._evdev = evdev.InputDevice(evdev_path)
+        except IOError as e:
             sys.exit(f"Failed to open evdev device: {e}")
 
         self.debug = debug
@@ -178,20 +172,20 @@ class MacroDevice:
         macro: Macro,
     ) -> bool:
         """Registers a Macro() object to a keypress and state. (e.g pressing down the enter key)"""
-        if key not in self.__macros:
-            self.__macros[key] = {}
+        if key not in self._macros:
+            self._macros[key] = {}
 
-        if state.name in self.__macros[key]:
+        if state.name in self._macros[key]:
             print("Failed to register macro: Key already assigned.")
             return False
         else:
-            self.__macros[key][state.name] = macro
+            self._macros[key][state.name] = macro
             print(f'Bound macro "{macro.name}" to key {evdev.ecodes.KEY[key]} {state.name}.')
             return True
 
     def unregister_macro(self, key: evdev.ecodes, state: KeyState) -> bool:
         """Checks for and removes a specified macro."""
-        if macro := self.__macros.get(key, {}).pop(state.name, None):
+        if macro := self._macros.get(key, {}).pop(state.name, None):
             print(f'Unbound macro "{macro.name}" from {key} on {state.name}.')
             return True
         else:
@@ -200,12 +194,15 @@ class MacroDevice:
 
     def run(self) -> None:
         if self.grab:
-            self.__evdev.grab()
-
-        self.event_loop()
-
-        if self.grab:
-            self.__evdev.ungrab()
+            try:
+                self._evdev.grab()
+                self.event_loop()
+                # Realistically failing to ungrab probably isn't an issue since the program is closing anyway.
+                self._evdev.ungrab()
+            except IOError as e:
+                print(f"Failed to grab or ungrab evdev device: {e}")
+        else:
+            self.event_loop()
 
     def event_loop(self) -> None:
         """Main keyboard event loop
@@ -213,12 +210,12 @@ class MacroDevice:
         This reads from evdev in a loop filtering for key events. If found,
         it then executes them based on whatever the macro is set to do.
         """
-        for ev in self.__evdev.read_loop():
+        for ev in self._evdev.read_loop():
             if ev.type != evdev.ecodes.EV_KEY:
                 continue
 
             if self.debug:
                 print(evdev.categorize(ev))
 
-            if macro := self.__macros.get(ev.code, {}).get(KeyState(ev.value).name, None):
+            if macro := self._macros.get(ev.code, {}).get(KeyState(ev.value).name, None):
                 macro()
