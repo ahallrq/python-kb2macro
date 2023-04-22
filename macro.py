@@ -1,4 +1,4 @@
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import redirect_stdout
 import importlib
 import io
 import shlex
@@ -18,7 +18,7 @@ try:
 
     PYPERCLIP_AVAILABLE = True
 except ImportError:
-    print("Unable to load Pyperclip. Pasting the output of macros will fallback to typing.")
+    print("WARN: Unable to load Pyperclip. Pasting the output of macros will fallback to typing.")
     print("To install Pyperclip please run the following command: pip3 install pyperclip")
     PYPERCLIP_AVAILABLE = False
 
@@ -41,7 +41,7 @@ class KeyState(Enum):
 
 
 class Macro:
-    def __init__(self, name: str, mtype: MacroType, value: str | Callable, args: dict = {}):
+    def __init__(self, name: str, mtype: MacroType, value: str | Callable, args: dict = None):
         self.name = name
         self.macro_type = mtype
         self.macro_value = value
@@ -51,6 +51,9 @@ class Macro:
         """When the object is called this will attempt to run the method with the same name as the macro type"""
         out = getattr(self, self.macro_type.name)(*args, **kwargs)
         if out is not None:
+            if self.macro_args.get("newline", True):
+                out += "\n"
+
             if self.macro_args.get("paste_output", False) and PYPERCLIP_AVAILABLE:
                 previous = pyperclip.paste()
                 pyperclip.copy(out)
@@ -126,8 +129,12 @@ class Macro:
 
     def M_EXEC(self):
         """Run a program"""
-        subprocess.Popen(shlex.split(self.macro_value))
-        return
+        proc = subprocess.Popen(shlex.split(self.macro_value), stdout=subprocess.PIPE)
+
+        # Read the program's stdout and type/paste it if background = False
+        # Note: This blocks macro exection until the child exits and should only be used for short-running programs.
+        if not self.macro_args.get("background", False):
+            return proc.stdout.read().decode()
 
     def M_PYTHON(self):
         """Excute a Python method"""
@@ -137,9 +144,11 @@ class Macro:
             sys.path.append(script_path)
 
         try:
+            # Try to import the user's specified script file as a module
             lib = importlib.import_module(script_filename)
             callable_out = io.StringIO()
             with redirect_stdout(callable_out):
+                # Get the method and execute it, capturing stdout
                 getattr(lib, self.macro_value["method"])()
             return callable_out.getvalue()
         except (ModuleNotFoundError, AttributeError):
@@ -183,7 +192,7 @@ class MacroDevice:
     def unregister_macro(self, key: evdev.ecodes, state: KeyState) -> bool:
         """Checks for and removes a specified macro."""
         if macro := self.__macros.get(key, {}).pop(state.name, None):
-            print('Unbound macro "{macro.name}" from {key} on {state.name}.')
+            print(f'Unbound macro "{macro.name}" from {key} on {state.name}.')
             return True
         else:
             print("Failed to remove macro: Key not bound.")
